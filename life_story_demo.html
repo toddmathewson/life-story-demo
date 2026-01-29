@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Life Story Demo (Begin / End)</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    body { margin: 0; background: #0b0f14; color: #e8eef6; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 20px; }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    .sub { opacity: .8; margin: 0 0 18px; line-height: 1.35; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 14px 0 18px; }
+    button {
+      appearance: none; border: 0; padding: 14px 18px; border-radius: 14px;
+      font-weight: 700; cursor: pointer; font-size: 16px;
+    }
+    #beginBtn { background: #3aa7ff; color: #061018; }
+    #endBtn { background: #ff5c73; color: #1a070a; }
+    #nextBtn { background: #8ef0b2; color: #06140b; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .card {
+      background: #111925; border: 1px solid rgba(255,255,255,.08);
+      border-radius: 18px; padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+    .grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
+    @media (min-width: 880px) { .grid { grid-template-columns: 1.1fr .9fr; } }
+    .label { font-weight: 700; margin-bottom: 8px; }
+    .big {
+      font-size: 22px; line-height: 1.35; padding: 14px 14px; border-radius: 14px;
+      background: rgba(58,167,255,.10); border: 1px solid rgba(58,167,255,.18);
+      min-height: 84px;
+    }
+    .status { font-size: 14px; opacity: .85; }
+    .pill { display: inline-block; padding: 6px 10px; border-radius: 999px; margin-left: 8px;
+      border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06);
+    }
+    textarea {
+      width: 100%; min-height: 260px; resize: vertical; border-radius: 14px;
+      padding: 12px; border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.04); color: #e8eef6; font-size: 14px; line-height: 1.5;
+    }
+    .smallrow { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    select, input[type="range"] {
+      background: rgba(255,255,255,.06); color: #e8eef6; border: 1px solid rgba(255,255,255,.12);
+      padding: 10px 12px; border-radius: 12px;
+    }
+    a { color: #8ef0b2; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Life Story Demo</h1>
+    <p class="sub">
+      Press <b>Begin</b>, then hand the tablet to the storyteller. The guide will speak prompts and listen.
+      Press <b>End</b> anytime. (Best in Chrome. Voice recognition availability varies by device.)
+    </p>
+
+    <div class="row">
+      <button id="beginBtn">Begin</button>
+      <button id="endBtn" disabled>End</button>
+      <button id="nextBtn" disabled>Next Prompt</button>
+      <span class="status" id="status">
+        Status: Idle <span class="pill" id="recPill">Not listening</span>
+      </span>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="label">Current Prompt</div>
+        <div id="promptBox" class="big">Press Begin to start.</div>
+
+        <div style="height:12px"></div>
+        <div class="label">Voice settings (optional)</div>
+        <div class="smallrow">
+          <label>
+            Voice:
+            <select id="voiceSelect"></select>
+          </label>
+
+          <label>
+            Speed:
+            <input id="rate" type="range" min="0.85" max="1.15" step="0.01" value="1.00" />
+            <span id="rateVal">1.00</span>
+          </label>
+        </div>
+
+        <div style="height:12px"></div>
+        <div class="status">
+          Tip: If the person pauses, let it happen. This demo doesn’t force them to hurry.
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="label">Transcript (live)</div>
+        <textarea id="transcript" placeholder="Transcript will appear here while they speak..."></textarea>
+        <div class="status" style="margin-top:10px;">
+          If speech-to-text isn’t supported, you can still demo the guide + prompts.
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ---------- Prompt Script (Phase 1 demo-friendly) ----------
+  const PROMPTS = [
+    {
+      say: "Hello. I’m here to help you tell your story, one piece at a time. There’s no rush. You can pause whenever you like. If I ask something you’d rather skip, just say ‘skip’ and we’ll move on.",
+      listenAfter: false
+    },
+    {
+      say: "Let’s start simple. Tell me where and when you were born.",
+      listenAfter: true
+    },
+    {
+      say: "Thank you. Who were the people you were closest to when you were growing up?",
+      listenAfter: true
+    },
+    {
+      say: "Can you describe the place you lived as a child? What did it look like?",
+      listenAfter: true
+    },
+    {
+      say: "What did a normal day look like for you back then?",
+      listenAfter: true
+    },
+    {
+      say: "Was there a moment when life started to feel different—for better or worse?",
+      listenAfter: true
+    },
+    {
+      say: "Before we stop today, is there anything from this part of your life you don’t want left out?",
+      listenAfter: true
+    },
+    {
+      say: "That’s a good place to stop for today. Thank you for sharing. When you’re ready next time, we can continue right where we left off.",
+      listenAfter: false
+    }
+  ];
+
+  // ---------- UI ----------
+  const beginBtn = document.getElementById('beginBtn');
+  const endBtn = document.getElementById('endBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const promptBox = document.getElementById('promptBox');
+  const transcriptEl = document.getElementById('transcript');
+  const statusEl = document.getElementById('status');
+  const recPill = document.getElementById('recPill');
+  const voiceSelect = document.getElementById('voiceSelect');
+  const rate = document.getElementById('rate');
+  const rateVal = document.getElementById('rateVal');
+
+  rate.addEventListener('input', () => rateVal.textContent = Number(rate.value).toFixed(2));
+
+  let step = -1;
+  let running = false;
+  let listening = false;
+
+  // ---------- Text-to-Speech ----------
+  function populateVoices() {
+    const voices = window.speechSynthesis?.getVoices?.() || [];
+    voiceSelect.innerHTML = '';
+    // Prefer something that sounds natural; fallback to first.
+    const preferred = voices
+      .map((v, i) => ({ v, i }))
+      .sort((a,b) => {
+        const score = (x) => {
+          const name = (x.v.name || '').toLowerCase();
+          const lang = (x.v.lang || '').toLowerCase();
+          let s = 0;
+          if (lang.startsWith('en')) s += 3;
+          if (name.includes('natural')) s += 2;
+          if (name.includes('google')) s += 1;
+          if (name.includes('siri')) s += 1;
+          return -s;
+        };
+        return score(a) - score(b);
+      });
+
+    const ordered = preferred.length ? preferred.map(x => x.v) : voices;
+
+    ordered.forEach((v, idx) => {
+      const opt = document.createElement('option');
+      opt.value = v.name;
+      opt.textContent = `${v.name} (${v.lang})`;
+      voiceSelect.appendChild(opt);
+      // auto-select first English-ish voice
+      if (idx === 0 && (v.lang || '').toLowerCase().startsWith('en')) {
+        voiceSelect.value = v.name;
+      }
+    });
+
+    // If no voices are available yet, keep trying.
+  }
+
+  if ('speechSynthesis' in window) {
+    populateVoices();
+    window.speechSynthesis.onvoiceschanged = populateVoices;
+  }
+
+  function speak(text) {
+    return new Promise((resolve) => {
+      if (!('speechSynthesis' in window)) {
+        // No TTS support; just show text.
+        resolve();
+        return;
+      }
+
+      window.speechSynthesis.cancel();
+
+      const utter = new SpeechSynthesisUtterance(text);
+      const voices = window.speechSynthesis.getVoices() || [];
+      const chosen = voices.find(v => v.name === voiceSelect.value) || voices[0];
+      if (chosen) utter.voice = chosen;
+      utter.rate = Number(rate.value);
+
+      utter.onend = resolve;
+      utter.onerror = resolve;
+
+      window.speechSynthesis.speak(utter);
+    });
+  }
+
+  // ---------- Speech Recognition ----------
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let rec = null;
+
+  function setupRecognition() {
+    if (!SpeechRecognition) return null;
+
+    const r = new SpeechRecognition();
+    r.continuous = true;
+    r.interimResults = true;
+    r.lang = 'en-US';
+
+    let finalText = '';
+    let interimText = '';
+
+    r.onstart = () => setListening(true);
+    r.onend = () => {
+      setListening(false);
+      // Chrome sometimes ends unexpectedly; if still in a "listen" segment, restart.
+      if (running && shouldBeListening()) {
+        try { r.start(); } catch (_) {}
+      }
+    };
+
+    r.onerror = (e) => {
+      // Common: "not-allowed", "service-not-allowed"
+      setListening(false);
+      appendLine(`\n[Speech recognition error: ${e.error}]`);
+    };
+
+    r.onresult = (event) => {
+      interimText = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const res = event.results[i];
+        const txt = res[0].transcript;
+        if (res.isFinal) finalText += txt + ' ';
+        else interimText += txt;
+      }
+      transcriptEl.value = (finalText + interimText).trim();
+      transcriptEl.scrollTop = transcriptEl.scrollHeight;
+
+      // Simple "skip" intent: if user says "skip" clearly, advance.
+      const lowered = transcriptEl.value.toLowerCase();
+      if (running && shouldBeListening() && lowered.endsWith('skip') || lowered.endsWith('skip.') || lowered.endsWith('skip ')) {
+        appendLine("\n[Detected: skip]");
+        nextPrompt();
+      }
+    };
+
+    function appendLine(s) {
+      transcriptEl.value = (transcriptEl.value + s);
+      transcriptEl.scrollTop = transcriptEl.scrollHeight;
+    }
+
+    return r;
+  }
+
+  rec = setupRecognition();
+
+  function setStatus(text) {
+    statusEl.firstChild.textContent = `Status: ${text} `;
+  }
+
+  function setListening(on) {
+    listening = on;
+    recPill.textContent = on ? "Listening" : "Not listening";
+    recPill.style.borderColor = on ? "rgba(142,240,178,.45)" : "rgba(255,255,255,.14)";
+  }
+
+  function shouldBeListening() {
+    if (!running) return false;
+    const p = PROMPTS[step];
+    return p && p.listenAfter === true;
+  }
+
+  function startListening() {
+    if (!rec) {
+      // No STT support; keep pill off but still function.
+      setListening(false);
+      return;
+    }
+    try { rec.start(); } catch (_) {}
+  }
+
+  function stopListening() {
+    if (!rec) return;
+    try { rec.stop(); } catch (_) {}
+  }
+
+  // ---------- Flow ----------
+  async function begin() {
+    if (running) return;
+    running = true;
+    step = -1;
+    transcriptEl.value = '';
+    beginBtn.disabled = true;
+    endBtn.disabled = false;
+    nextBtn.disabled = false;
+
+    setStatus("Starting…");
+
+    // In many browsers, audio permissions require a user gesture (Begin click satisfies).
+    // Prime TTS with a short utterance to reduce delays.
+    await speak(" ");
+
+    nextPrompt();
+  }
+
+  async function end() {
+    if (!running) return;
+    running = false;
+    stopListening();
+    window.speechSynthesis?.cancel?.();
+
+    beginBtn.disabled = false;
+    endBtn.disabled = true;
+    nextBtn.disabled = true;
+
+    setStatus("Ended");
+    promptBox.textContent = "Session ended. You can press Begin to run the demo again.";
+  }
+
+  async function nextPrompt() {
+    if (!running) return;
+
+    stopListening();
+
+    step++;
+    if (step >= PROMPTS.length) {
+      await end();
+      return;
+    }
+
+    const current = PROMPTS[step];
+    promptBox.textContent = current.say;
+
+    setStatus(`Prompt ${step + 1} of ${PROMPTS.length}`);
+
+    await speak(current.say);
+
+    if (!running) return;
+
+    if (current.listenAfter) {
+      // Small pause before listening so the speaker isn't cut off by mic start glitches.
+      setTimeout(() => {
+        if (!running) return;
+        setStatus(`Listening (Prompt ${step + 1}/${PROMPTS.length})`);
+        startListening();
+      }, 400);
+    } else {
+      // If last message is a closing, auto-end after speaking.
+      if (step === PROMPTS.length - 1) {
+        setTimeout(() => end(), 600);
+      }
+    }
+  }
+
+  // ---------- Buttons ----------
+  beginBtn.addEventListener('click', begin);
+  endBtn.addEventListener('click', end);
+  nextBtn.addEventListener('click', nextPrompt);
+
+  // Initial status
+  setStatus("Idle");
+})();
+</script>
+</body>
+</html>
